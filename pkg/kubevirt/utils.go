@@ -18,6 +18,7 @@ package kubevirt
 
 import (
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,10 +38,6 @@ type CommandExecutor interface {
 // unique prefix allows each DataVolume to be unique per vm in a capi
 // machine deployment or machine set
 func prefixDataVolumeTemplates(vm *kubevirtv1.VirtualMachine, prefix string) *kubevirtv1.VirtualMachine {
-	if len(vm.Spec.DataVolumeTemplates) == 0 {
-		return vm
-	}
-
 	dvNameMap := map[string]string{}
 	for i := range vm.Spec.DataVolumeTemplates {
 
@@ -56,6 +53,14 @@ func prefixDataVolumeTemplates(vm *kubevirtv1.VirtualMachine, prefix string) *ku
 			if ok {
 				vm.Spec.Template.Spec.Volumes[i].PersistentVolumeClaim.ClaimName = prefixedName
 			}
+		} else if volume.HostDisk != nil {
+			parts := strings.Split(volume.HostDisk.Path, "/")
+			base := parts[len(parts)-1]
+			parent := parts[:len(parts)-1]
+			newParts := make([]string, 0)
+			newParts = append(newParts, parent...)
+			newParts = append(newParts, fmt.Sprintf("%s-%s", prefix, base))
+			vm.Spec.Template.Spec.Volumes[i].HostDisk.Path = strings.Join(newParts, "/")
 		} else if volume.VolumeSource.DataVolume != nil {
 			prefixedName, ok := dvNameMap[volume.VolumeSource.DataVolume.Name]
 			if ok {
